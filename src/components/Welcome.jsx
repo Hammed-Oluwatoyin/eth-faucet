@@ -1,11 +1,14 @@
-import React from "react";
+import React, {useEffect, useState} from "react";
 import { AiFillPlayCircle } from "react-icons/ai";
 import { SiEthereum } from "react-icons/si";
 import { BsInfoCircle } from "react-icons/bs";
+import Web3 from "web3";
 
 
 
 const companyCommonStyles = "min-h-[70px] sm:px-0 px-2 sm:min-w-[120px] flex justify-center items-center border-[0.5px] border-gray-400 text-sm font-light text-white";
+
+const shortenAddress = (address) => `${address.slice(0, 5)}...${address.slice(address.length - 4)}`;
 
 const Input = ({ placeholder, name, type, value, handleChange }) => (
   <input
@@ -19,7 +22,59 @@ const Input = ({ placeholder, name, type, value, handleChange }) => (
 );
 
 const Welcome = () => {
+  const [web3Api, setWeb3Api] = useState({
+      provider: null,
+      web3: null
+  })
 
+  const [account, setAccount] = useState(null)
+
+
+
+
+
+    useEffect(() => {
+    const loadProvider = async () => {
+     let provider = null;
+     
+     if(window.ethereum){
+        provider= window.ethereum;
+
+        try {
+          await provider.request({method: "eth_requestAccounts"});
+        }
+        catch{
+          console.error("User denied accounts access! ")
+        }
+
+
+     }else if(window.web3) {
+        provider = window.web3.currentProvider
+     }
+     else if (!process.env.production) {
+      provider = new Web3.providers.HttpProvider("HTTP://192.168.43.199:7545")
+     }
+
+     
+    setWeb3Api({
+      web3: new Web3(provider),
+      provider
+    })
+    };
+
+
+    loadProvider();
+  }, []);
+
+  useEffect(() => {
+    const getAccount = async () => {
+      const accounts = await web3Api.web3.eth.getAccounts()
+      setAccount(accounts[0]);
+    }
+    web3Api.web3 && getAccount()
+  }, [web3Api.web3])
+
+  console.log(web3Api.web3)
 
   return (
     <div className="flex w-full justify-center items-center">
@@ -34,7 +89,10 @@ const Welcome = () => {
            
             <button
               type="button"
-              
+              onClick ={ async () => {
+                const accounts = await window.ethereum.request({method: "eth_requestAccounts"})
+                console.log(accounts)
+              }}
               className="flex flex-row justify-center items-center my-5 bg-[#2952e3] p-3 rounded-full cursor-pointer hover:bg-[#2546bd]"
             >
               <AiFillPlayCircle className="text-white mr-2" />
@@ -73,7 +131,7 @@ const Welcome = () => {
               </div>
               <div>
                 <p className="text-white font-light text-sm">
-                  Address
+                  {account ? shortenAddress(account): "not connected"}
                 </p>
                 <p className="text-white font-semibold text-lg mt-1">
                   Ethereum
