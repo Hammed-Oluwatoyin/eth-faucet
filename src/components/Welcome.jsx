@@ -1,14 +1,16 @@
-import React, {useEffect, useState} from "react";
+import React, {useCallback, useEffect, useState} from "react";
 import { AiFillPlayCircle } from "react-icons/ai";
 import { SiEthereum } from "react-icons/si";
 import { BsInfoCircle } from "react-icons/bs";
 import Web3 from "web3";
+import detectEthereumProvider from "@metamask/detect-provider"
+import { loadContract } from "../utils/load-contract";
 
 
 
 const companyCommonStyles = "min-h-[70px] sm:px-0 px-2 sm:min-w-[120px] flex justify-center items-center border-[0.5px] border-gray-400 text-sm font-light text-white";
 
-const shortenAddress = (address) => `${address.slice(0, 5)}...${address.slice(address.length - 4)}`;
+const shortenAddress = (address) => `${address.slice(0, 12)}...${address.slice(address.length - 12)}`;
 
 const Input = ({ placeholder, name, type, value, handleChange }) => (
   <input
@@ -28,6 +30,10 @@ const Welcome = () => {
   })
 
   const [account, setAccount] = useState(null)
+  const [balance, setBalance]= useState(0)
+  const [shouldReload, reload] = useState(false)
+
+  const reloadEffect = useCallback(() => reload(!shouldReload), [shouldReload])
 
 
 
@@ -35,36 +41,31 @@ const Welcome = () => {
 
     useEffect(() => {
     const loadProvider = async () => {
-     let provider = null;
-     
-     if(window.ethereum){
-        provider= window.ethereum;
-
-        try {
-          await provider.request({method: "eth_requestAccounts"});
-        }
-        catch{
-          console.error("User denied accounts access! ")
-        }
-
-
-     }else if(window.web3) {
-        provider = window.web3.currentProvider
-     }
-     else if (!process.env.production) {
-      provider = new Web3.providers.HttpProvider("HTTP://192.168.43.199:7545")
-     }
-
-     
-    setWeb3Api({
-      web3: new Web3(provider),
-      provider
-    })
+     const provider = await detectEthereumProvider();
+     const contract = await loadContract("Faucet", provider);
+     if (provider) {
+      //  provider.request({method:"eth_requestAccounts"});
+      setWeb3Api({
+        web3: new Web3(provider),
+        provider,
+        contract
+      })
+     } else {
+      console.error("please, install Metamask.")
+     }  
     };
-
-
     loadProvider();
   }, []);
+
+
+  useEffect(() => {
+    const loadBalance = async () => {
+      const {contract,web3 } = web3Api
+      const balance = await web3.eth.getBalance(contract.address)
+      setBalance(web3.utils.fromWei(balance, "ether"))
+    }
+    web3Api.contract && loadBalance()
+  }, [web3Api, shouldReload])
 
   useEffect(() => {
     const getAccount = async () => {
@@ -73,6 +74,27 @@ const Welcome = () => {
     }
     web3Api.web3 && getAccount()
   }, [web3Api.web3])
+
+
+  const addFunds = useCallback(async () => {
+    const {contract, web3 } = web3Api
+    await contract.addFunds({
+      from: account,
+      value: web3.utils.toWei("1", "ether")
+    })
+   // window.location.reload()
+   reloadEffect()
+  }, [web3Api, account, reloadEffect])
+
+  const withdrawFunds = async () => {
+    const {contract , web3 } = web3Api
+    const withdrawAmount = web3.utils.toWei("0.1", "ether")
+    console.log(withdrawAmount)
+    await contract.withdraw(withdrawAmount, {
+      from: account
+    })
+    reloadEffect();
+  }
 
   console.log(web3Api.web3)
 
@@ -87,20 +109,28 @@ const Welcome = () => {
             Explore the crypto world. Buy and sell cryptocurrencies easily on Krypto.
           </p>
            
-            <button
-              type="button"
-              onClick ={ async () => {
-                const accounts = await window.ethereum.request({method: "eth_requestAccounts"})
-                console.log(accounts)
-              }}
+           {account ? <button
+              type="button" 
+            
+              className="flex flex-row justify-center items-center my-5 bg-[#2952e3] p-3 rounded-full cursor-pointer hover:bg-[#2546bd]"
+            >
+              <AiFillPlayCircle className="text-white mr-2" />
+              <p className="text-white text-base font-semibold">
+                Connected
+              </p>
+            </button>  : (<button
+              type="button" 
+             onClick={() =>
+                      web3Api.provider.request({method: "eth_requestAccounts"}
+                    )}
               className="flex flex-row justify-center items-center my-5 bg-[#2952e3] p-3 rounded-full cursor-pointer hover:bg-[#2546bd]"
             >
               <AiFillPlayCircle className="text-white mr-2" />
               <p className="text-white text-base font-semibold">
                 Connect Wallet
               </p>
-            </button>
-        
+            </button>)
+        }
 
           <div className="grid sm:grid-cols-3 grid-cols-2 w-full mt-10">
             <div className={`rounded-tl-2xl ${companyCommonStyles}`}>
@@ -130,8 +160,8 @@ const Welcome = () => {
                 <BsInfoCircle fontSize={17} color="#fff" />
               </div>
               <div>
-                <p className="text-white font-light text-sm">
-                  {account ? shortenAddress(account): "not connected"}
+                <p className="text-dark font-light text-lg">
+                  {account ? shortenAddress(account): "no connected address"}
                 </p>
                 <p className="text-white font-semibold text-lg mt-1">
                   Ethereum
@@ -140,7 +170,10 @@ const Welcome = () => {
             </div>
           </div>
           <div className="p-5 sm:w-96 w-full flex flex-col justify-start items-center blue-glassmorphism">
-            
+            <div className="text-white flex text-2xl text-bold">
+              <div>Current Balance : </div>
+              <div>{balance} Eth</div>
+                </div>
             <Input placeholder="Amount (ETH)" name="amount" type="number"  />
             
             
@@ -150,17 +183,17 @@ const Welcome = () => {
           
                 <button
                   type="button"
-                
+                onClick ={addFunds}
                   className="text-white  mt-2 border-[1px] p-2 border-[#3d4f7c] hover:bg-[#3d4f7c] rounded-full cursor-pointer"
                 >
-                  Send Now
+                  Donate 1 Eth Now
                 </button>
                   <button
                   type="button"
-                
+                   onClick={withdrawFunds}
                   className="text-white  mt-2 border-[1px] p-2 border-[#3d4f7c] hover:bg-[#3d4f7c] rounded-full cursor-pointer"
                 >
-                  Withdraw Now
+                  Withdraw 0.1Eth
                 </button>
               
           </div>
