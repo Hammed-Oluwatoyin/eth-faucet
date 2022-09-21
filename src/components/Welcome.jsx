@@ -26,13 +26,20 @@ const Input = ({ placeholder, name, type, value, handleChange }) => (
 const Welcome = () => {
   const [web3Api, setWeb3Api] = useState({
       provider: null,
-      web3: null
+      isProviderLoaded: false, 
+      web3: null,
+      contract: null
   })
 
   const [account, setAccount] = useState(null)
   const [balance, setBalance]= useState(0)
   const [shouldReload, reload] = useState(false)
+   const canConnectToContract = account && web3Api.contract
 
+  const setAccountListener = (provider) => {
+    provider.on("accountsChanged", _ =>  window.location.reload() /*(accounts) => setAccount(accounts[0])*/)
+     provider.on("chainChanged", _ => window.location.reload())
+  }
   const reloadEffect = useCallback(() => reload(!shouldReload), [shouldReload])
 
 
@@ -42,15 +49,18 @@ const Welcome = () => {
     useEffect(() => {
     const loadProvider = async () => {
      const provider = await detectEthereumProvider();
-     const contract = await loadContract("Faucet", provider);
+     
      if (provider) {
-      //  provider.request({method:"eth_requestAccounts"});
+      const contract = await loadContract("Faucet", provider);
+      setAccountListener(provider);
       setWeb3Api({
         web3: new Web3(provider),
         provider,
-        contract
+        contract,
+        isProviderLoaded: true
       })
      } else {
+      setWeb3Api(api => ({...api, isProviderLoaded: true}))
       console.error("please, install Metamask.")
      }  
     };
@@ -96,8 +106,6 @@ const Welcome = () => {
     reloadEffect();
   }
 
-  console.log(web3Api.web3)
-
   return (
     <div className="flex w-full justify-center items-center">
       <div className="flex md:flex-row flex-col items-start justify-between md:p-20 py-12 px-4">
@@ -108,17 +116,31 @@ const Welcome = () => {
           <p className="text-left mt-5 text-white font-light md:w-9/12 w-11/12 text-base">
             Explore the crypto world. Buy and sell cryptocurrencies easily on Krypto.
           </p>
-           
-           {account ? <button
-              type="button" 
-            
-              className="flex flex-row justify-center items-center my-5 bg-[#2952e3] p-3 rounded-full cursor-pointer hover:bg-[#2546bd]"
-            >
-              <AiFillPlayCircle className="text-white mr-2" />
-              <p className="text-white text-base font-semibold">
-                Connected
-              </p>
-            </button>  : (<button
+          <div>
+              {web3Api.isProviderLoaded ? 
+              <div>
+                 {account ? 
+                        <button type="button" className="flex flex-row justify-center items-center my-5 bg-[#2952e3] p-3 rounded-full cursor-pointer hover:bg-[#2546bd]" >
+                          <AiFillPlayCircle className="text-white mr-2" />
+                            <p className="text-white text-base font-semibold">
+                            Connected
+                          </p>
+                        </button> :
+                      !web3Api.provider ?
+                        <>
+                          <div className="bg-[#eccc16] p-3 rounded-full text-base">
+                            <strong>
+                              Wallet is not detected!{` `}
+                            </strong>
+                            
+                          <a
+                            rel="noreferrer"
+                            target="_blank"
+                            href="https://docs.metamask.io">
+                              Install Metamask
+                          </a>
+                    </div>
+                  </>  : (<button
               type="button" 
              onClick={() =>
                       web3Api.provider.request({method: "eth_requestAccounts"}
@@ -130,8 +152,13 @@ const Welcome = () => {
                 Connect Wallet
               </p>
             </button>)
-        }
-
+        }</div>: <span className="bg-[#f7f7f6] mt-2 p-1 rounded-full"><strong>Looking for web3...</strong></span>}
+          </div>
+           { !canConnectToContract &&
+            <i className="bg-[#f7f7f6] mt-2 p-1 rounded-full">
+              Connect to Ganache
+            </i>
+          }
           <div className="grid sm:grid-cols-3 grid-cols-2 w-full mt-10">
             <div className={`rounded-tl-2xl ${companyCommonStyles}`}>
               Reliability
@@ -161,7 +188,7 @@ const Welcome = () => {
               </div>
               <div>
                 <p className="text-dark font-light text-lg">
-                  {account ? shortenAddress(account): "no connected address"}
+                   <strong className="text-1xl">{account ? shortenAddress(account): "no connected address"}</strong>
                 </p>
                 <p className="text-white font-semibold text-lg mt-1">
                   Ethereum
@@ -170,32 +197,27 @@ const Welcome = () => {
             </div>
           </div>
           <div className="p-5 sm:w-96 w-full flex flex-col justify-start items-center blue-glassmorphism">
-            <div className="text-white flex text-2xl text-bold">
-              <div>Current Balance : </div>
-              <div>{balance} Eth</div>
+            <div className="text-white   text-1xl text-bold">
+              Current Balance ::: <strong className="text-2xl"> {balance} ETH</strong> 
                 </div>
             <Input placeholder="Amount (ETH)" name="amount" type="number"  />
-            
-            
-
-            <div className="h-[1px] w-full bg-gray-400 my-2" />
-
-          
+            <div className="h-[1px] w-full bg-gray-400 my-2" />         
                 <button
+                  disabled={!canConnectToContract}
                   type="button"
                 onClick ={addFunds}
-                  className="text-white  mt-2 border-[1px] p-2 border-[#3d4f7c] hover:bg-[#3d4f7c] rounded-full cursor-pointer"
+                  className="bg-pink-300  text-dark  mt-2 border-[1px] p-2 border-[#3d4f7c] hover:bg-[#3d4f7c] rounded-full cursor-pointer"
                 >
                   Donate 1 Eth Now
                 </button>
                   <button
+                   disabled={!canConnectToContract}
                   type="button"
                    onClick={withdrawFunds}
-                  className="text-white  mt-2 border-[1px] p-2 border-[#3d4f7c] hover:bg-[#3d4f7c] rounded-full cursor-pointer"
+                  className="text-dark bg-pink-300 mt-2 border-[1px] p-2 border-[#3d4f7c] hover:bg-[#3d4f7c] rounded-full cursor-pointer"
                 >
                   Withdraw 0.1Eth
-                </button>
-              
+                </button>   
           </div>
         </div>
       </div>
